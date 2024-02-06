@@ -23,7 +23,7 @@
 /* Simics stuff  */
 #include <simics/api.h>
 #include <simics/alloc.h>
-#include <simics/utils.h>
+#include <simics/utils.h>'
 
 #define AVDC_MALLOC(nelems, type) MM_MALLOC(nelems, type)
 #define AVDC_FREE(p) MM_FREE(p)
@@ -121,23 +121,25 @@ avdc_access(avdark_cache_t *self, avdc_pa_t pa, avdc_access_type_t type)
         /* HINT: You will need to update this function */
         avdc_tag_t tag = tag_from_pa(self, pa);
         int index = index_from_pa(self, pa);
-        int hit;
-        int hit2;
+        int hit = 0;
         int y = self->number_of_sets;
 
-        hit = self->lines[index].valid && self->lines[index].tag == tag;
-        hit2 =  self->lines[index + y].valid && self->lines[index + y].tag == tag;
-
-        if (!hit || !hit2){
-                for (int i = 0; i < self->number_of_sets; i++) {
-                        if (self->lines[i].valid == 1 ) {
-                                self->lines[i].age += 1;
-                        }
-                        if(self->lines[i+y].valid ==1){
-                                self->lines[i+y].age += 1;
-                        }
+        for(int i = 0; i < self->assoc; i++){
+                if(self->lines[index + y*i].valid == 1 && self->lines[index + y*i].tag == tag){
+                        hit = 1;
+                        self->lines[index + y*i].age = 0;
+                        break;
                 }
-                if(!hit){
+        }
+
+        if (hit == 0){
+
+                for (int i = 0; i < self->number_of_sets; i++) {
+                self->lines[i].age += 1;
+                self->lines[i+y].age += 1;
+                }
+
+                if(self->lines[index].age > self->lines[index + y].age){
                         self->lines[index].valid = 1;
                         self->lines[index].tag = tag;
                         self->lines[index].age = 0;
@@ -182,8 +184,7 @@ avdc_flush_cache(avdark_cache_t *self)
 
 
 int
-avdc_resize(avdark_cache_t *self,
-            avdc_size_t size, avdc_block_size_t block_size, avdc_assoc_t assoc)
+avdc_resize(avdark_cache_t *self,avdc_size_t size, avdc_block_size_t block_size, avdc_assoc_t assoc)
 {
         /* HINT: This function precomputes some common values and
          * allocates the self->lines array. You will need to update
@@ -215,7 +216,7 @@ avdc_resize(avdark_cache_t *self,
         /* HINT: If you change this, you may have to update
          * avdc_delete() to reflect changes to how thie self->lines
          * array is allocated. */
-        self->lines = AVDC_MALLOC(self->number_of_sets, avdc_cache_line_t);
+        self->lines = AVDC_MALLOC(self->number_of_sets * self->assoc, avdc_cache_line_t);
 
         /* Flush the cache, this initializes the tag array to a known state */
         avdc_flush_cache(self);
