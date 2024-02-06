@@ -126,26 +126,27 @@ avdc_access(avdark_cache_t *self, avdc_pa_t pa, avdc_access_type_t type)
         int hit2;
         int y = self->number_of_sets;
 
-        hit = self->lines[index].valid && self->lines[index].tag == tag ;
+        hit = self->lines[index].valid && self->lines[index].tag == tag;
         hit2 =  self->lines[index + y].valid && self->lines[index + y].tag == tag;
 
-        if (hit || hit2) {
-                if (hit) {
-                        self->lines[index].age = 0;
-                } else {
-                        self->lines[index + y].age = 0;
+        if (!hit || !hit2){
+                for (int i = 0; i < self->number_of_sets; i++) {
+                        if (self->lines[i].valid == 1) {
+                                 self->lines[i].age += 1;      
+                        } else {
+                                self->lines[i+ y].age += 1;
                 }
-        } else if (!hit) {
+                if(!hit){
                         self->lines[index].valid = 1;
                         self->lines[index].tag = tag;
                         self->lines[index].age = 0;
-                } else {
+                }else{
                         self->lines[index + y].valid = 1;
                         self->lines[index + y].tag = tag;
                         self->lines[index + y].age = 0;
+                }
+                }
         }
-        
-
 
         switch (type) {
         case AVDC_READ: /* Read accesses */
