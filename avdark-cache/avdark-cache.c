@@ -67,7 +67,6 @@ tag_from_pa(avdark_cache_t *self, avdc_pa_t pa)
 static inline int
 index_from_pa(avdark_cache_t *self, avdc_pa_t pa)
 {
-        print("block size %d" , self->block_size_log2);
         return (pa >> self->block_size_log2) & (self->number_of_sets - 1);
 }
 
@@ -131,10 +130,12 @@ avdc_access(avdark_cache_t *self, avdc_pa_t pa, avdc_access_type_t type)
 
         if (!hit || !hit2){
                 for (int i = 0; i < self->number_of_sets; i++) {
-                        if (self->lines[i].valid == 1) {
-                                 self->lines[i].age += 1;      
-                        } else {
-                                self->lines[i+ y].age += 1;
+                        if (self->lines[i].valid == 1 ) {
+                                self->lines[i].age += 1;
+                        }
+                        if(self->lines[i+y].valid ==1){
+                                self->lines[i+y].age += 1;
+                        }
                 }
                 if(!hit){
                         self->lines[index].valid = 1;
@@ -145,7 +146,7 @@ avdc_access(avdark_cache_t *self, avdc_pa_t pa, avdc_access_type_t type)
                         self->lines[index + y].tag = tag;
                         self->lines[index + y].age = 0;
                 }
-                }
+                
         }
 
         switch (type) {
