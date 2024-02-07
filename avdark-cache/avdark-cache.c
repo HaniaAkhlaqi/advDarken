@@ -23,7 +23,7 @@
 /* Simics stuff  */
 #include <simics/api.h>
 #include <simics/alloc.h>
-#include <simics/utils.h>'
+#include <simics/utils.h>
 
 #define AVDC_MALLOC(nelems, type) MM_MALLOC(nelems, type)
 #define AVDC_FREE(p) MM_FREE(p)
@@ -43,7 +43,7 @@
 struct avdc_cache_line {
         avdc_tag_t tag;
         int        valid;
-        int age;
+        int age; //for LRU replacement policy
 };
 
 /**
@@ -115,42 +115,43 @@ avdc_dbg_log(avdark_cache_t *self, const char *msg, ...)
 }
 
 
-void
-avdc_access(avdark_cache_t *self, avdc_pa_t pa, avdc_access_type_t type)
-{
-        /* HINT: You will need to update this function */
-        avdc_tag_t tag = tag_from_pa(self, pa);
-        int index = index_from_pa(self, pa);
-        int hit = 0;
-        int y = self->number_of_sets;
 
-        for(int i = 0; i < self->assoc; i++){
-                if(self->lines[index + y*i].valid == 1 && self->lines[index + y*i].tag == tag){
-                        hit = 1;
-                        self->lines[index + y*i].age = 0;
-                        break;
-                }
+void avdc_access(avdark_cache_t *self, avdc_pa_t pa, avdc_access_type_t type) {
+    avdc_tag_t tag = tag_from_pa(self, pa);
+    int index = index_from_pa(self, pa);
+    int hit = 0;
+
+    // Search for hit
+    for (int i = 0; i < self->assoc; i++) {
+        if (self->lines[index * self->assoc + i].valid == 1 && self->lines[index * self->assoc + i].tag == tag) {
+            hit = 1;
+            self->lines[index * self->assoc + i].age = 0; // Reset age of hit line
+            break;
+        }
+    }
+
+    if (!hit) {
+        // If miss, find the least recently used line to replace
+        int lru_index = 0;
+        int max_age = 0;
+        for (int i = 0; i < self->assoc; i++) {
+            if (self->lines[index * self->assoc + i].age > max_age) {
+                max_age = self->lines[index * self->assoc + i].age;
+                lru_index = i;
+            }
         }
 
-        if (hit == 0){
+        // Replace the least recently used line
+        self->lines[index * self->assoc + lru_index].valid = 1;
+        self->lines[index * self->assoc + lru_index].tag = tag;
+        self->lines[index * self->assoc + lru_index].age = 0;
 
-                for (int i = 0; i < self->number_of_sets; i++) {
-                self->lines[i].age += 1;
-                self->lines[i+y].age += 1;
-                }
-
-                if(self->lines[index].age > self->lines[index + y].age){
-                        self->lines[index].valid = 1;
-                        self->lines[index].tag = tag;
-                        self->lines[index].age = 0;
-                }else{
-                        self->lines[index + y].valid = 1;
-                        self->lines[index + y].tag = tag;
-                        self->lines[index + y].age = 0;
-                }
-                
+        // Increment age of other lines in the set
+        for (int i = 0; i < self->assoc; i++) {
+            if (i != lru_index)
+                self->lines[index * self->assoc + i].age++;
         }
-
+        }
         switch (type) {
         case AVDC_READ: /* Read accesses */
                 avdc_dbg_log(self, "read: pa: 0x%.16lx, tag: 0x%.16lx, index: %d, hit: %d\n",
@@ -171,17 +172,17 @@ avdc_access(avdark_cache_t *self, avdc_pa_t pa, avdc_access_type_t type)
 }
 
 void
-avdc_flush_cache(avdark_cache_t *self)
-{
+avdc_flush_cache(avdark_cache_t *self){
         /* HINT: You will need to update this function */
-        for (int i = 0; i < self->number_of_sets * self->assoc; i++) {
-                self->lines[i].valid = 0;
-                self->lines[i].tag = 0;
-                self->lines[i].age = 0;
+        for (int i = 0; i < self->number_of_sets; i++) { //set all lines to invalid for all ways
+                for (int j = 0; j < self->assoc; j++){      
+                self->lines[i * self->assoc + j ].valid = 0;
+                self->lines[i * self->assoc + j].tag = 0;
+                self->lines[i * self->assoc + j].age = 0;
                 
+                }
         }
 }
-
 
 int
 avdc_resize(avdark_cache_t *self,avdc_size_t size, avdc_block_size_t block_size, avdc_assoc_t assoc)
@@ -216,7 +217,7 @@ avdc_resize(avdark_cache_t *self,avdc_size_t size, avdc_block_size_t block_size,
         /* HINT: If you change this, you may have to update
          * avdc_delete() to reflect changes to how thie self->lines
          * array is allocated. */
-        self->lines = AVDC_MALLOC(self->number_of_sets * self->assoc, avdc_cache_line_t);
+        self->lines = AVDC_MALLOC(self->number_of_sets * self->assoc, avdc_cache_line_t); //allocate 
 
         /* Flush the cache, this initializes the tag array to a known state */
         avdc_flush_cache(self);
@@ -278,9 +279,9 @@ avdc_new(avdc_size_t size, avdc_block_size_t block_size,
 void
 avdc_delete(avdark_cache_t *self)
 {
-        if (self->lines)
+        if (self->lines){
                 AVDC_FREE(self->lines);
-
+        }
         AVDC_FREE(self);
 }
 
