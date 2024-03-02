@@ -135,9 +135,9 @@ void avdc_access(avdark_cache_t *self, avdc_pa_t pa, avdc_access_type_t type) {
         int lru_index = 0;
         int max_age = 0;
         for (int i = 0; i < self->assoc; i++) {
-            if (self->lines[index * self->assoc + i].age > max_age) {
-                max_age = self->lines[index * self->assoc + i].age;
-                lru_index = i;
+            if (self->lines[index * self->assoc + i].age > max_age) {//find the line with the highest age
+                max_age = self->lines[index * self->assoc + i].age; //update max age
+                lru_index = i;//the least recently used line is the one with the highest age
             }
         }
 
