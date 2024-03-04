@@ -17,7 +17,7 @@
 
 /* Size of the matrices to multiply */
 #ifndef SIZE
-#define SIZE 700
+#define SIZE 600
 #endif
 
 /* HINT: The Makefile allows you to specify L1 and L2 block sizes as
@@ -45,6 +45,22 @@ matmul_opt()
          * here. It should calculate mat_c := mat_a * mat_b. See
          * matmul_ref() for a reference solution.
          */
+        int jj, kk, i, j, k;
+        int block = 10;
+
+        for (jj = 0; jj < SIZE; jj +=block){
+                for (kk = 0; kk < SIZE; kk +=block){
+                        for (i = 0; i < SIZE; i++){
+                                for (j = jj; j < jj+block; j++){
+                                        for (k = kk; k < kk+block; k++){
+                                                mat_c[i][j] += mat_a[i][k] * mat_b[k][j];
+                                                //printf("(%i,%i) = (%i,%i)*(%i,%i)", i, j, i, k, k, j);
+                                                //printf("\n");
+                                        }
+                                }
+                        }
+                }
+        }
 }
 
 /**
