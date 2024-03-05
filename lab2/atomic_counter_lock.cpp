@@ -26,7 +26,7 @@ int atomic_counter_lock::decrement() {
 
 void atomic_counter_lock::set(int value) {
     // TODO: Add locks here
-    m_value = value;
+    m_value = value; 
 }
 
 int atomic_counter_lock::get() {
