@@ -57,17 +57,17 @@ user_lock_dekker::user_lock_dekker()
 void user_lock_dekker::lock(int thread_id) {
     int other_thread = 1 - thread_id;
 
-    // Memory fence needed here to ensure proper visibility of m_flag[thread_id] modification
-    m_flag[thread_id].store(true, std::memory_order_acquire); 
+    
+    m_flag[thread_id].store(true, std::memory_order_acquire); // Memory fence needed here to ensure proper visibility of m_flag[thread_id] modification
     while (m_flag[other_thread].load(std::memory_order_acquire)) {
         if (m_turn.load(std::memory_order_acquire) != thread_id) {
-            // Memory fence needed here 
-            m_flag[thread_id].store(false, std::memory_order_acquire);
+            
+            m_flag[thread_id].store(false, std::memory_order_acquire);// Memory fence needed here 
             while (m_turn.load(std::memory_order_acquire) != thread_id) {
                 // Busy wait
             }
-            // Memory fence needed here 
-            m_flag[thread_id].store(true, std::memory_order_acquire); 
+           
+            m_flag[thread_id].store(true, std::memory_order_acquire);  // Memory fence needed here 
         }
     }
 }
@@ -75,10 +75,10 @@ void user_lock_dekker::lock(int thread_id) {
 void user_lock_dekker::unlock(int thread_id) {
     int other_thread = 1 - thread_id;
 
-    // Memory fence needed here 
-    m_turn.store(other_thread, std::memory_order_acquire); 
-    // Memory fence needed here 
-    m_flag[thread_id].store(false, std::memory_order_acquire);
+    
+    m_turn.store(other_thread, std::memory_order_acquire); // Memory fence needed here 
+    
+    m_flag[thread_id].store(false, std::memory_order_acquire); // Memory fence needed here 
 }
 
 
@@ -87,6 +87,6 @@ void user_lock_dekker::unlock(int thread_id) {
 /*If we use memory_order_relaxed with no synchronization or ordering constraints on other reads or writes
 it does the same as the implementation with load and store aromic operations now since it ensures atomicity and not what other threads see. Hence the need of memory fences where thety are commented.*/
 
-/* memory_order_acquire is a little bit stricter, which means that no reads or writes in the current thread dependent on the value currently loaded can be reordered before this load. It shouldn't pass the tests but it does! why?*/
+/* memory_order_consume is a little bit stricter, which means that no reads or writes in the current thread dependent on the value currently loaded can be reordered before this load. It shouldn't pass the tests but it does! why?*/
 
 /*For TSO memory model, memory_order_aquire should be used which ensures that no reads or writes in the current thread can be reordered before this load and garantees visibility of writes from other threads that release the same atomic variable whcih we needed in dekker algorithm */

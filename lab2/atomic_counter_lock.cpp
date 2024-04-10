@@ -26,10 +26,12 @@ int atomic_counter_lock::decrement() {
 
 void atomic_counter_lock::set(int value) {
     // TODO: Add locks here
+    std::lock_guard<std::mutex> guard(m_lock); //modern compiler helps if the data is not aligned in one cache line instead it is resided in two but to ensure since we don't know the compiler behavior use lock
     m_value = value; 
 }
 
 int atomic_counter_lock::get() {
     // TODO: Add locks here
+    std::lock_guard<std::mutex> guard(m_lock);
     return m_value;
 }
