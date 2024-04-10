@@ -1,4 +1,4 @@
-#include "atomic_counters.hpp"
+// #include "atomic_counters.hpp"
 
 // atomic_counter_atomic_incdec::atomic_counter_atomic_incdec()
 //     : atomic_counter()
@@ -28,22 +28,10 @@
 
 /* Bonus part 2: Memory Orderings*/
 /*Change your atomic counter implementation to use the most relaxed memory order from std::memory_order 
-that is possible to use without introducing any bugs.*/
+that is possible to use without introducing any bugs. I think it doesn't do anything to add mmeory_order_relaxed as they provide atomicity which already is fulfilled by atomic operations such as fetch_add*/
 
+#include "atomic_counters.hpp"
 #include <atomic>
-
-class atomic_counter_atomic_incdec {
-public:
-    atomic_counter_atomic_incdec();
-
-    int increment();
-    int decrement();
-    void set(int value);
-    int get();
-
-private:
-    std::atomic<int> m_value;
-};
 
 atomic_counter_atomic_incdec::atomic_counter_atomic_incdec()
     : m_value(0) {

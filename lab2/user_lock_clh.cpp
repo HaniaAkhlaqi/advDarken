@@ -15,15 +15,45 @@ user_lock_clh::user_lock_clh()
 
 void user_lock_clh::lock(int thread_id) {
     local_l *l = &m_local[thread_id];
-    // TODO: Implement the lock acquire part of the CLH algorithm here
-
-    (void)l; // TODO: Delete this line
-
+    
+    l->local_cell->store(1);
+    l->previous = m_tail.exchange(l->local_cell);
+    while (l->previous->load() != 0)
+    {
+        /* busy waiting */
+    } 
 }
 
 void user_lock_clh::unlock(int thread_id) {
     local_l *l = &m_local[thread_id];
-    // TODO: Implement the lock release part of the CLH algorithm here
+    
+    l->local_cell->store(0);
 
-    (void)l; // TODO: Delete this line
+    l->local_cell = l->previous;
 }
+
+
+// void user_lock_clh::lock(int thread_id) {
+//     local_l *l = &m_local[thread_id];
+//     // we set the local node's flag to true, indicating that this thread wants to acquire the lock
+//     l->local_cell->store(1, std::memory_order_release);
+
+//     // then set the previous pointer to the tail of the queue atomically 
+//     l->previous = m_tail.exchange(l->local_cell, std::memory_order_acq_rel);
+
+//     // and spin until the previous node's flag becomes false, indicating that it has released the lock
+//     while (l->previous->load(std::memory_order_acquire)) {
+//         // Spin
+//     }
+
+// }
+
+// void user_lock_clh::unlock(int thread_id) {
+//     local_l *l = &m_local[thread_id];
+
+//     // Set the local node's flag to false, indicating that this thread releases the lock
+//     l->local_cell->store(0, std::memory_order_release);
+
+//     // Move the tail to the previous node, removing the current node from the queue
+//     l->local_cell = l->previous;
+// }
