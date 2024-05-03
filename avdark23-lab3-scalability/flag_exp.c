@@ -14,6 +14,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <stdatomic.h>
+#include <stdbool.h>
 
 #include "gs_interface.h"
 
@@ -32,9 +34,8 @@ typedef struct {
         double error;
 
         /* TASK: Do you need any thread local state for synchronization? */
-        volatile int c_row; // This int indicates which row in the matrix the thread is in
+        atomic_bool* row_flags; // Array of flags for each row
 
-        double padding[16]; // unused data to avoid false sharing.
 } thread_info_t;
 
 /** Define to enable debug mode */
@@ -51,7 +52,9 @@ thread_info_t *threads = NULL;
 /** The global error for the last iteration */
 static double global_error;
 
-pthread_barrier_t barrier;
+
+/** Flag to indicate whether a row has been completed.*/
+static atomic_bool* row_done = NULL;
 
 void
 gsi_init()
@@ -65,14 +68,20 @@ gsi_init()
                 exit(EXIT_FAILURE);
         }
 
+        row_done = (atomic_bool *)calloc(gs_size, sizeof(atomic_bool));
+        if (!row_done) {
+        fprintf(stderr, "Failed to allocate memory for row flags.\n");
+        exit(EXIT_FAILURE);
+        }
+
         /* Initialize global_error to something larger than the
          * tolerance to get the algorithm started */
         global_error = gs_tolerance + 1;
 
         /* TASK: Initialize global variables here */
-	for (int i=0;i<gs_nthreads;i++)
-		threads[i].c_row = 0;
-	pthread_barrier_init(&barrier,NULL,gs_nthreads);       
+        for (int i = 0; i < gs_size; i++) {
+                atomic_init(&row_done[i], false);
+        }
 }
 
 void
@@ -86,11 +95,11 @@ gsi_finish()
 
         if (threads)
                 free(threads);
-
-        pthread_barrier_destroy(&barrier);
+        if (row_done)
+                free(row_done);
 }
 
-static void
+static void              
 thread_sweep(int tid, int iter, int lbound, int rbound)
 {
         threads[tid].error = 0.0;
@@ -103,9 +112,6 @@ thread_sweep(int tid, int iter, int lbound, int rbound)
 
                 /* TASK: Wait for data to be available from the thread
                  * to the left */
-                while ( tid != 0 && threads[tid-1].c_row <= threads[tid].c_row+1) {
-			continue;
-                }
 
                 dprintf("%d: Starting on row: %d\n", tid, row);
 
@@ -123,11 +129,11 @@ thread_sweep(int tid, int iter, int lbound, int rbound)
 
                 /* TASK: Tell the thread to the right that this thread
                  * is done with the row */
-                threads[tid].c_row++;
-
+                /* Set flag to indicate row completion */
+                atomic_store(&threads[tid].row_flags[row], true);
                 dprintf("%d: row %d done\n", tid, row);
         }
-        threads[tid].c_row++;
+
 }
 
 /**
@@ -139,43 +145,44 @@ thread_compute(void *_self)
         thread_info_t *self = (thread_info_t *)_self;
         const int tid = self->thread_id;
 
+        int lbound = 0, rbound = 0;
+
         /* TASK: Compute bounds for this thread */
-        int chunk = gs_size/gs_nthreads;
-        int lbound = chunk*tid;
-	int rbound = lbound + chunk;
-	if (tid == 0)
-		lbound++;
-	if (tid == gs_nthreads-1)
-		rbound--;
 
-        gs_verbose_printf("%i: lbound: %i, rbound: %i\n",
-                          tid, lbound, rbound);
+        gs_verbose_printf("%i: lbound: %i, rbound: %i\n",tid, lbound, rbound);
 
-        for (int iter = 0;
-             iter < gs_iterations && global_error > gs_tolerance;
-             iter++) {
+        for (int iter = 0; iter < gs_iterations && global_error > gs_tolerance; iter++) {
                 dprintf("%i: Starting iteration %i\n", tid, iter);
 
                 thread_sweep(tid, iter, lbound, rbound);
 
-                /* TASK: Update global error */
+
+                /* Synchronize: Wait for all threads to complete their row */
+                for (int row = 1; row < gs_size - 1; row++) {
+                        while (!atomic_load(&self->row_flags[row])); // Spin until the flag is set
+                }
+                
+                /* Reset flags for next iteration */
+                for (int row = 1; row < gs_size - 1; row++) {
+                        atomic_store(&self->row_flags[row], false);
+                }
+                 /* TASK: Update global error */
                 /* Note: The reduction should only be done by one
                  * thread after all threads have updated their local
                  * errors */
                 /* Hint: Which thread is guaranteed to complete its
                  * sweep last? */
-		if(tid == (gs_nthreads - 1)) {
-			// Update global error, since we are the last to finish.
-			global_error = 0;
-			for (int i=0;i<gs_nthreads;i++)
-				global_error+=threads[i].error;
-		}             
-                dprintf("%d: iteration %d done\n", tid, iter);
+                /* The last thread (tid == gs_nthreads - 1) is guaranteed to complete its sweep last */
+                if (tid == gs_nthreads - 1) {
+                        global_error = 0.0;
+                        for (int t = 0; t < gs_nthreads; ++t) {
+                                global_error += threads[t].error;
+                        }
+                }
 
+                dprintf("%d: iteration %d done\n", tid, iter);
                 /* TASK: Iteration barrier */
-		pthread_barrier_wait(&barrier);
-		threads[tid].c_row = 0;
-		pthread_barrier_wait(&barrier);
+
         }
 
         gs_verbose_printf(
@@ -193,13 +200,26 @@ void
 gsi_calculate()
 {
         int err;
+        /* Allocate and initialize row flags for each thread */
+        for (int t = 0; t < gs_nthreads; ++t) {
+                threads[t].thread_id = t;
+                threads[t].row_flags = (atomic_bool*)malloc(gs_size * sizeof(atomic_bool));
+                if (!threads[t].row_flags) {
+                        fprintf(stderr, "Failed to allocate memory for row flags.\n");
+                        exit(EXIT_FAILURE);
+                }
+                for (int i = 0; i < gs_size; ++i) {
+                        atomic_init(&threads[t].row_flags[i], false);
+                }
+        }
 
+        /*Create threads*/
         for (int t = 0; t < gs_nthreads; t++) {
                 gs_verbose_printf("\tSpawning thread %d\n",t);
 
                 threads[t].thread_id = t;
-                err = pthread_create(&threads[t].thread, NULL,
-                                     thread_compute, &threads[t]);
+                err = pthread_create(&threads[t].thread, NULL,thread_compute, &threads[t]);
+
                 if (err) {
                         fprintf(stderr,
                                 "Error: pthread_create() failed: %d, "

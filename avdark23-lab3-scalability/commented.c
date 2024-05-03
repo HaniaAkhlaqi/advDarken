@@ -32,9 +32,11 @@ typedef struct {
         double error;
 
         /* TASK: Do you need any thread local state for synchronization? */
-        volatile int c_row; // This int indicates which row in the matrix the thread is in
+        volatile int c_row; // Keep track of which row in the matrix the thread is in, visible to other threads and read from memory each time it is used instead of cached calue in a register.
+	double padding[16]; // unused data to avoid false sharing.
+    //ach thread has its own thread_info_t structure, and these structures are allocated contiguously in memory for better cache locality. However, without padding, adjacent elements in these structures could reside on the same cache line. This means that if one thread modifies its error field, it could inadvertently invalidate the cache line containing the error field of another thread, even though they are independent.
 
-        double padding[16]; // unused data to avoid false sharing.
+    //To avoid this, we add padding to the thread_info_t structure to ensure that each element resides on its own seperate cache line. This way, threads can modify their own error fields without affecting other threads.
 } thread_info_t;
 
 /** Define to enable debug mode */
@@ -51,7 +53,8 @@ thread_info_t *threads = NULL;
 /** The global error for the last iteration */
 static double global_error;
 
-pthread_barrier_t barrier;
+/*Initialize a barrier that will be used to synchronize the threads.*/ 
+pthread_barrier_t barrier; 
 
 void
 gsi_init()
@@ -70,9 +73,10 @@ gsi_init()
         global_error = gs_tolerance + 1;
 
         /* TASK: Initialize global variables here */
-	for (int i=0;i<gs_nthreads;i++)
+	for (int i=0;i<gs_nthreads;i++){
 		threads[i].c_row = 0;
-	pthread_barrier_init(&barrier,NULL,gs_nthreads);       
+        }
+	pthread_barrier_init(&barrier,NULL,gs_nthreads); // Initialize the barrier with the total number of threads that will be waiting for the barrier to be released.    
 }
 
 void
@@ -102,9 +106,11 @@ thread_sweep(int tid, int iter, int lbound, int rbound)
                         iter, row);
 
                 /* TASK: Wait for data to be available from the thread
-                 * to the left */
+                 * to the left before sweeping a row, thread 0 does not need to synchronize with left thread*/
                 while ( tid != 0 && threads[tid-1].c_row <= threads[tid].c_row+1) {
-			continue;
+                        continue;
+                //if the left thread's current row is less than or equal to the current thread's expected next row means the left thread has not finished processing the row that the current thread is waiting for once the left thread moved to the next row the loop exits and alllows current thread to process the row.
+                        
                 }
 
                 dprintf("%d: Starting on row: %d\n", tid, row);
@@ -127,7 +133,9 @@ thread_sweep(int tid, int iter, int lbound, int rbound)
 
                 dprintf("%d: row %d done\n", tid, row);
         }
-        threads[tid].c_row++;
+        threads[tid].c_row++; //to ensure that the last thread is not stuck in the while loop waiting for the second last thread to finish processing the last row. because threads are not guaranteed to finish processing the last row at the same time. this ensures threads that finish processing their rows early still update c_row to allow the last thread to finish processing the last row.
+
+        //also the last thread signals others it has finished its last row in order to pass the barrier point and move to next iteration
 }
 
 /**
@@ -165,17 +173,17 @@ thread_compute(void *_self)
                 /* Hint: Which thread is guaranteed to complete its
                  * sweep last? */
 		if(tid == (gs_nthreads - 1)) {
-			// Update global error, since we are the last to finish.
+			// Only the last thread (tid == gs_nthreads - 1) performs the reduction operation and updates the global error, since it's the last to finish.
 			global_error = 0;
 			for (int i=0;i<gs_nthreads;i++)
 				global_error+=threads[i].error;
 		}             
                 dprintf("%d: iteration %d done\n", tid, iter);
 
-                /* TASK: Iteration barrier */
-		pthread_barrier_wait(&barrier);
+                /* TASK: Iteration barrier because all threads should finish the current iteration before the next one*/
+		pthread_barrier_wait(&barrier); //wait for all threads to finish processing its assigned rows
 		threads[tid].c_row = 0;
-		pthread_barrier_wait(&barrier);
+		pthread_barrier_wait(&barrier); // At this point the last thread has updated the global error but wait for all threads to reset the row counter for the next iteration. 
         }
 
         gs_verbose_printf(
@@ -241,3 +249,59 @@ gsi_calculate()
  * c-file-style: "linux"
  * End:
  */
+
+
+/*notes for me
+1. code comments 
+2. a shared status flag array among threads to indicate whether each thread has completed its current row computation. each thread will update its own status flag when completing its task and check the status of its neighboring thread before proceeding?
+
+loop unrolling: we know it is compiler optimization improving the performance by instruction level parallelism
+arrange the mmaory accesses in the unrolled loop to maximize data locality and minimize cache misses
+*/
+
+
+
+/*bonus
+1. As more threads are added, the overhead of thread creation, synchronization, and communication can start to outweigh the benefits of parallelism. This is evident from the fact that increasing the number of threads from 4 to 8 or 8 to 16 does not necessarily result in a significant reduction in execution time.
+
+The Gauss-Seidel algorithm itself may not be highly parallelizable due to its iterative nature and dependencies between iterations. Certain parts of the algorithm may not be easily parallelizable, limiting the scalability of the parallel implementation.
+
+2. 
+*/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*Bonus
+1. is performance gain linear with num threads? 
+2. What if we wanted to manually specify the memory order (i.e., fence type) for each atomic operation? What is the memory model we are working with? Which operations require fences and which not? You can find more information about the different memory ordering flags available in C here: https://en.cppreference.com/w/c/atomic/memory_orderLinks to an external site.
+3. What if we had a TSO memory model and we were not concerned with the C memory model, where would fences be needed then?
+4.Suppose we decide to implement the solution differently. We want to use a thread pool, where each thread sits waiting for a task to be assigned. We implement the solution as follows: As soon as a thread finishes with its current task (i.e., computations for a row), it is assigned another row (maybe from another chunk). How would this affect performance? What is the name of the miss that is introduced?*/
