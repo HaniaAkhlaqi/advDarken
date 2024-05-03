@@ -36,6 +36,21 @@ static float *vec_b __attribute__((aligned (XMM_ALIGNMENT_BYTES)));
 static float *vec_c __attribute__((aligned (XMM_ALIGNMENT_BYTES)));
 static float *vec_ref __attribute__((aligned (XMM_ALIGNMENT_BYTES)));
 
+/*
+
+static void
+matvec_unrolled(size_t n, float vec_c[n],const float mat_a[n][n], const float vec_b[n])
+{
+    for (int i = 0; i < n; i++)
+        for (int j = 0; j < n; j += 4)
+            vec_c[i] += mat_a[i][j + 0] * vec_b[j + 0]
+                + mat_a[i][j + 1] * vec_b[j + 1]
+                + mat_a[i][j + 2] * vec_b[j + 2]
+                + mat_a[i][j + 3] * vec_b[j + 3];
+}*/
+
+
+
 static void
 matvec_sse()
 {
@@ -56,6 +71,26 @@ matvec_sse()
          * HINT: You can create the sum of all elements in a vector
          * using two hadd instructions.
          */
+
+        for(size_t i = 0; i < SIZE; i++){
+            __m128 sum = _mm_setzero_ps(); // initialize sum to zero
+            for(size_t j = 0; j < SIZE; j += 4 ){
+                __m128 row =  _mm_load_ps (mat_a + i * SIZE + j);
+                __m128 col =  _mm_load_ps (vec_b + j);
+
+                __m128 mult = _mm_mul_ps (row, col);
+
+                sum = _mm_add_ps(sum, mult); // add the result to the sum
+
+            }
+
+            sum = _mm_hadd_ps(sum, sum); // horizontal add of sum
+            sum = _mm_hadd_ps(sum, sum); // horizontal add of sum again
+
+            
+            _mm_store_ss(vec_c + i, sum); // store the result in vec_c
+
+        }
 }
 
 /**

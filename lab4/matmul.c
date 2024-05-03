@@ -64,10 +64,22 @@ static float mat_b[SIZE][SIZE] __attribute__((aligned (XMM_ALIGNMENT_BYTES)));
 static float mat_c[SIZE][SIZE] __attribute__((aligned (XMM_ALIGNMENT_BYTES)));
 static float mat_ref[SIZE][SIZE] __attribute__((aligned (XMM_ALIGNMENT_BYTES)));
 
+
+// static void
+// matmat(size_t n, float mat_c[n][n],
+//        const float mat_a[n][n], const float mat_b[n][n])
+// {
+//     for (int i = 0; i < n; i++)
+//         for (int k = 0; k < n; k++)
+//             for (int j = 0; j < n; j++)
+//                 mat_c[i][j] += mat_a[i][k] * mat_b[k][j];
+// }
+
 /**
  * Blocked matrix multiplication, SSE block (4x4 matrix). Implement
  * your solution to the bonus assignment here.
  */
+
 static inline void
 matmul_sse_block(int i, int j, int k)
 {

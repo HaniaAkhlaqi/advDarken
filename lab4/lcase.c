@@ -24,7 +24,7 @@
 #include "util.h"
 
 #define CASE_BIT 0x20
-#define XMM_ALIGNMENT_BYTES 16 
+#define XMM_ALIGNMENT_BYTES 16
 
 /* Use align data if required by the access type */
 #define ALIGN_AS_REQUIRED 1
@@ -73,9 +73,9 @@
 #endif
 
 #if (ALIGN == ALIGN_UNALIGNED) || \
-        ((ALIGN == ALIGN_AS_REQUIRED) && (ACCESS_TYPE == ACCESS_MOVDQU))
+    ((ALIGN == ALIGN_AS_REQUIRED) && (ACCESS_TYPE == ACCESS_MOVDQU))
 
-typedef void (* test_function_t)(char *, const char *, size_t);
+typedef void (*test_function_t)(char *, const char *, size_t);
 
 static void *
 my_malloc(size_t size)
@@ -84,13 +84,13 @@ my_malloc(size_t size)
          * aligned memory and adding 1 to that pointer */
         void *p;
         fprintf(stderr, "Allocating %zi bytes of unaligned memory\n", size);
-        if (!(p = _mm_malloc(size + 1, XMM_ALIGNMENT_BYTES))) {
+        if (!(p = _mm_malloc(size + 1, XMM_ALIGNMENT_BYTES)))
+        {
                 fprintf(stderr, "Failed to allocate memory.\n");
                 abort();
         }
         return (void *)((char *)p + 1);
 }
-
 
 static void
 my_free(void *p)
@@ -108,13 +108,13 @@ my_malloc(size_t size)
 {
         void *p;
         fprintf(stderr, "Allocating %zi bytes of aligned memory\n", size);
-        if (!(p = _mm_malloc(size, XMM_ALIGNMENT_BYTES))) {
+        if (!(p = _mm_malloc(size, XMM_ALIGNMENT_BYTES)))
+        {
                 fprintf(stderr, "Failed to allocate memory.\n");
                 abort();
         }
         return p;
 }
-
 
 static void
 my_free(void *p)
@@ -136,7 +136,8 @@ static void
 lcase_ref_cond(char *restrict dst, const char *restrict src, size_t len)
 {
         const char *cur = src;
-        while (cur != src + len) {
+        while (cur != src + len)
+        {
                 const char c = *(cur++);
                 *(dst++) = (c >= 'A' && c <= 'Z') ? c | CASE_BIT : c;
         }
@@ -159,6 +160,18 @@ lcase_sse_simple(char *restrict dst, const char *restrict src, size_t len)
          *  - _mm_set1_epi8
          *  - _mm_or_si128 (the por instruction)
          */
+        // Iterate through the source string in chunks of 16 bytes (128 bits)
+        for (size_t i = 0; i < len; i += 16)
+        {
+                // Load 16 bytes from the source into a SSE register
+                __m128i v = LOAD_SI128((__m128i *)(src + i));
+
+                // Perform a bitwise OR operation with 0x20 to convert to lowercase
+                __m128i X = _mm_or_si128(v, _mm_set1_epi8(0x20));
+
+                // Store the result back to memory
+                STORE_SI128((__m128i *)(dst + i), X);
+        }
 }
 
 static void
@@ -176,6 +189,51 @@ lcase_sse_cond(char *restrict dst, const char *restrict src, size_t len)
          *  - _mm_cmpgt_epi8 (the pcmpgtb instruction)
          *  - _mm_and_si128 (the pand instruction)
          */
+        // Iterate through the source string in chunks of 16 bytes (128 bits).
+        for (size_t i = 0; i < len; i += 16)
+        {
+                // Load 16 bytes from the source into a SSE register.
+                __m128i v = LOAD_SI128((__m128i *)(src + i));
+ 
+                // // Check if each character is within the range of uppercase letters.
+                // __m128i cmp1 = _mm_cmpgt_epi8(v, _mm_set1_epi8('A' - 1));
+                // __m128i cmp2 = _mm_cmpgt_epi8(_mm_set1_epi8('Z' + 1), v);
+                // __m128i cmp_result = _mm_and_si128(cmp1, cmp2);
+
+                // // Convert uppercase letters to lowercase using a bitwise OR operation with 0x20.
+                // __m128i result = _mm_or_si128(_mm_and_si128(v, cmp_result), _mm_andnot_si128(cmp_result, v));
+
+                // // Store the result back to memory.
+                // STORE_SI128((__m128i *)(dst + i), result);
+
+
+
+                // Set all 16 bytes in the SSE register X to the constant value 0x20
+                __m128i X = _mm_set1_epi8(0x20);
+
+                // Check if each character is within the range of uppercase letters
+                // Compare each byte in the SSE register v with the threshold values 'A' - 1 and 'Z' + 1 respectively
+                // Perfrom a bitwise AND operation between the SSE registers X and the comparison results
+                X = _mm_and_si128(X, _mm_cmpgt_epi8(v, _mm_set1_epi8('A' - 1)));
+                X = _mm_and_si128(X, _mm_cmplt_epi8(v, _mm_set1_epi8('Z' + 1)));
+
+                // Perform the bitwise OR operation between the SSE register v and the masked SSE register X
+                //  Store the result in destination register
+
+                STORE_SI128((__m128i *)(dst + i), _mm_or_si128(v, X));
+
+                // // Check if each character is within the range of uppercase letters
+                // __m128i cmp1 = _mm_cmpgt_epi8(v, _mm_set1_epi8('A' - 1));
+                // __m128i cmp2 = _mm_cmpgt_epi8(v, _mm_set1_epi8('Z' + 1));
+                // X = _mm_and_si128(X, cmp1);
+                // X = _mm_and_si128(X, cmp2);
+
+                // // Perform the bitwise OR operation between the SSE register v and the masked SSE register X
+                // //__m128i result = _mm_or_si128(v, X);
+                // STORE_SI128((__m128i *)(dst+i), _mm_or_si128(v, X));
+                // // Store the result back to memory.
+                // //STORE_SI128((__m128i *)(dst + i), result);
+        }
 }
 
 static char *
@@ -197,8 +255,8 @@ generate_test_data(size_t len)
 
 static int
 run_tests(const char *restrict in, size_t len,
-          void (* f_ref)(char *restrict, const char * restrict, size_t), char *restrict ref_area,
-          void (* f_test)(char *restrict, const char * restrict, size_t), char *restrict test_area)
+          void (*f_ref)(char *restrict, const char *restrict, size_t), char *restrict ref_area,
+          void (*f_test)(char *restrict, const char *restrict, size_t), char *restrict test_area)
 {
         struct timespec ts_start, ts_stop;
         double runtime_ref, runtime_sse;
@@ -224,17 +282,19 @@ run_tests(const char *restrict in, size_t len,
         printf("Speedup: %.2f\n",
                runtime_ref / runtime_sse);
 
-        if (memcmp(ref_area, test_area, len)) {
+        if (memcmp(ref_area, test_area, len))
+        {
                 printf("Error: Reference run and SSE run produce inconsistent results.\n");
                 return 1;
-        } else {
+        }
+        else
+        {
                 printf("Reference run and SSE are consistent.\n");
                 return 0;
         }
 }
 
-int
-main(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
         char *in, *out, *ref;
         size_t len = 512 * (1 << 20);
@@ -255,7 +315,8 @@ main(int argc, char *argv[])
         int rc = run_tests(in, len,
                            lcase_ref_simple, ref,
                            lcase_sse_simple, out);
-        if (rc) return 1;
+        if (rc)
+                return 1;
 
         printf("---\n"
                "With conditional\n"
@@ -263,7 +324,8 @@ main(int argc, char *argv[])
         rc = run_tests(in, len,
                        lcase_ref_cond, ref,
                        lcase_sse_cond, out);
-        if (rc) return 1;
+        if (rc)
+                return 1;
 
         my_free(in);
         my_free(out);
@@ -271,7 +333,6 @@ main(int argc, char *argv[])
 
         return 0;
 }
-
 
 /*
  * Local Variables:
