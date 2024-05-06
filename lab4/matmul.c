@@ -301,6 +301,25 @@ matmul_sse()
         /* TASK: Implement your simple matrix multiplication using SSE
          * here. (Multiply mat_a and mat_b into mat_c.)
          */
+
+        /*
+        static void
+        matmat(size_t n, float mat_c[n][n], const float mat_a[n][n], const float mat_b[n][n])
+{
+    for (int i = 0; i < n; i++)
+        for (int k = 0; k < n; k++)
+            for (int j = 0; j < n; j++)
+                mat_c[i][j] += mat_a[i][k] * mat_b[k][j];
+}*/
+        for (i=0;i<SIZE;i++){
+                for (k=0;k<SIZE; k ++) {
+                        __m128 a = _mm_set1_ps(mat_a[i][k]);
+                        for (j=0;j<SIZE;j+=4){
+                                __m128 col = _mm_load_ps(mat_b[k]+j);
+                                _mm_store_ps(mat_c[i]+j,_mm_add_ps(_mm_load_ps(mat_c[i]+j),_mm_mul_ps(a, col)));
+                       }
+                }
+        }   
 }
 
 #else

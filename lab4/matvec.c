@@ -74,18 +74,18 @@ matvec_sse()
 
         for(size_t i = 0; i < SIZE; i++){
             __m128 sum = _mm_setzero_ps(); // initialize sum to zero
-            for(size_t j = 0; j < SIZE; j += 4 ){
-                __m128 row =  _mm_load_ps (mat_a + i * SIZE + j);
-                __m128 col =  _mm_load_ps (vec_b + j);
+            for(size_t j = 0; j < SIZE; j += 4 ){// Iterates over each column of the current row
+                __m128 row =  _mm_load_ps (mat_a + i * SIZE + j); //Load four consecutive elements from the current row
+                __m128 col =  _mm_load_ps (vec_b + j); // Load four consecutive elements from the vector b
 
-                __m128 mult = _mm_mul_ps (row, col);
+                __m128 mult = _mm_mul_ps (row, col); //Performs element-wise multiplication
 
                 sum = _mm_add_ps(sum, mult); // add the result to the sum
 
             }
 
             sum = _mm_hadd_ps(sum, sum); // horizontal add of sum
-            sum = _mm_hadd_ps(sum, sum); // horizontal add of sum again
+            sum = _mm_hadd_ps(sum, sum); // One last horizontal addition again to reduce the four-element vector to a single sum
 
             
             _mm_store_ss(vec_c + i, sum); // store the result in vec_c
