@@ -92,6 +92,62 @@ matmul_sse_block(int i, int j, int k)
          * parameter can be used to restrict to which elements the
          * result is stored, all other elements are set to zero.
          */
+
+        // Load  mat_a and mat_b into SIMD registers
+        // __m128 a0 = _mm_loadu_ps(&mat_a[i]+k);
+        // __m128 a1 = _mm_loadu_ps(&mat_a[i + 1]+k);
+        // __m128 a2 = _mm_loadu_ps(&mat_a[i + 2]+k);
+        // __m128 a3 = _mm_loadu_ps(&mat_a[i + 3]+k);
+
+        // __m128 b0 = _mm_loadu_ps(&mat_b[k][j]);
+        // __m128 b1 = _mm_loadu_ps(&mat_b[k + 1]+j);
+        // __m128 b2 = _mm_loadu_ps(&mat_b[k + 2]+j);
+        // __m128 b3 = _mm_loadu_ps(&mat_b[k + 3]+j);
+
+        // // Transpose so that b column will be a register "row"
+        // _MM_TRANSPOSE4_PS(b0, b1, b2, b3);
+
+        // // Matrix multiplication for every index of c
+        // __m128 c0 = _mm_dp_ps(a0, b0, 0xF1);
+        // __m128 c1 = _mm_dp_ps(a0, b1, 0xF1);
+        // __m128 c2 = _mm_dp_ps(a0, b2, 0xF1);
+        // __m128 c3 = _mm_dp_ps(a0, b3, 0xF1);
+
+        // c0 = _mm_add_ps(c0, _mm_dp_ps(a1, b0, 0xF1));
+        // c1 = _mm_add_ps(c1, _mm_dp_ps(a1, b1, 0xF1));
+        // c2 = _mm_add_ps(c2, _mm_dp_ps(a1, b2, 0xF1));
+        // c3 = _mm_add_ps(c3, _mm_dp_ps(a1, b3, 0xF1));
+
+        // c0 = _mm_add_ps(c0, _mm_dp_ps(a2, b0, 0xF1));
+        // c1 = _mm_add_ps(c1, _mm_dp_ps(a2, b1, 0xF1));
+        // c2 = _mm_add_ps(c2, _mm_dp_ps(a2, b2, 0xF1));
+        // c3 = _mm_add_ps(c3, _mm_dp_ps(a2, b3, 0xF1));
+
+        // c0 = _mm_add_ps(c0, _mm_dp_ps(a3, b0, 0xF1));
+        // c1 = _mm_add_ps(c1, _mm_dp_ps(a3, b1, 0xF1));
+        // c2 = _mm_add_ps(c2, _mm_dp_ps(a3, b2, 0xF1));
+        // c3 = _mm_add_ps(c3, _mm_dp_ps(a3, b3, 0xF1));
+
+        // // Accumulate the results into mat_c
+        // __m128 mc0 = _mm_loadu_ps(&mat_c[i][j]);
+        // __m128 mc1 = _mm_loadu_ps(&mat_c[i + 1][j]);
+        // __m128 mc2 = _mm_loadu_ps(&mat_c[i + 2][j]);
+        // __m128 mc3 = _mm_loadu_ps(&mat_c[i + 3][j]);
+
+        // mc0 = _mm_add_ps(mc0, c0);
+        // mc1 = _mm_add_ps(mc1, c1);
+        // mc2 = _mm_add_ps(mc2, c2);
+        // mc3 = _mm_add_ps(mc3, c3);
+
+        // // Store the results back to mat_c
+        // _mm_storeu_ps(&mat_c[i][j], mc0);
+        // _mm_storeu_ps(&mat_c[i + 1][j], mc1);
+        // _mm_storeu_ps(&mat_c[i + 2][j], mc2);
+        // _mm_storeu_ps(&mat_c[i + 3][j], mc3);
+
+        ////////////////////////////////////////////////////////////////
+
+        // Load  mat_a and mat_b into SIMD registers
         __m128 a0 = _mm_load_ps(mat_a[i] + k);
         __m128 a1 = _mm_load_ps(mat_a[i + 1] + k);
         __m128 a2 = _mm_load_ps(mat_a[i + 2] + k);
@@ -102,34 +158,127 @@ matmul_sse_block(int i, int j, int k)
         __m128 b2 = _mm_load_ps(mat_b[k + 2] + j);
         __m128 b3 = _mm_load_ps(mat_b[k + 3] + j);
 
+        // Transpose so that b column will be a register "row"
         _MM_TRANSPOSE4_PS(b0, b1, b2, b3);
 
+        // Matrix multiplication for every index of c
         __m128 c00 = _mm_dp_ps(a0, b0, 0xF1);
         __m128 c01 = _mm_dp_ps(a0, b1, 0xF1);
         __m128 c02 = _mm_dp_ps(a0, b2, 0xF1);
         __m128 c03 = _mm_dp_ps(a0, b3, 0xF1);
+        //__m128 c0 = _mm_set_ps(c00, c01, c02, c03);
+        _MM_TRANSPOSE4_PS(c00, c01, c02, c03);
+
         __m128 c10 = _mm_dp_ps(a1, b0, 0xF1);
         __m128 c11 = _mm_dp_ps(a1, b1, 0xF1);
         __m128 c12 = _mm_dp_ps(a1, b2, 0xF1);
         __m128 c13 = _mm_dp_ps(a1, b3, 0xF1);
+        //__m128 c1 = _mm_set_ps(c10, c11, c12, c13);
+        _MM_TRANSPOSE4_PS(c10, c11, c12, c13);
+
         __m128 c20 = _mm_dp_ps(a2, b0, 0xF1);
         __m128 c21 = _mm_dp_ps(a2, b1, 0xF1);
         __m128 c22 = _mm_dp_ps(a2, b2, 0xF1);
         __m128 c23 = _mm_dp_ps(a2, b3, 0xF1);
+        //__m128 c2 = (c20, c21, c22, c23);
+        _MM_TRANSPOSE4_PS(c20, c21, c22, c23);
+
         __m128 c30 = _mm_dp_ps(a3, b0, 0xF1);
         __m128 c31 = _mm_dp_ps(a3, b1, 0xF1);
         __m128 c32 = _mm_dp_ps(a3, b2, 0xF1);
         __m128 c33 = _mm_dp_ps(a3, b3, 0xF1);
-
-        _MM_TRANSPOSE4_PS(c00, c01, c02, c03);
-        _MM_TRANSPOSE4_PS(c10, c11, c12, c13);
-        _MM_TRANSPOSE4_PS(c20, c21, c22, c23);
+        //__m128 c3 = (c30, c31, c32, c33);
         _MM_TRANSPOSE4_PS(c30, c31, c32, c33);
+
 
         _mm_store_ps(mat_c[i] + j, _mm_add_ps(_mm_load_ps(mat_c[i] + j), c00));
         _mm_store_ps(mat_c[i + 1] + j, _mm_add_ps(_mm_load_ps(mat_c[i + 1] + j), c10));
         _mm_store_ps(mat_c[i + 2] + j, _mm_add_ps(_mm_load_ps(mat_c[i + 2] + j), c20));
         _mm_store_ps(mat_c[i + 3] + j, _mm_add_ps( _mm_load_ps(mat_c[i + 3] + j), c30));
+
+
+
+
+
+        ////////////////////////////////////////////////////////////
+
+        // //Load  mat_a and mat_b into SIMD registers
+        // __m128 a0 = _mm_loadu_ps(&mat_a[i]+k);
+        // __m128 a1 = _mm_loadu_ps(&mat_a[i + 1]+k);
+        // __m128 a2 = _mm_loadu_ps(&mat_a[i + 2]+k);
+        // __m128 a3 = _mm_loadu_ps(&mat_a[i + 3]+k);
+
+        // __m128 b0 = _mm_loadu_ps(&mat_b[k]+j);
+        // __m128 b1 = _mm_loadu_ps(&mat_b[k + 1]+j);
+        // __m128 b2 = _mm_loadu_ps(&mat_b[k + 2]+j);
+        // __m128 b3 = _mm_loadu_ps(&mat_b[k + 3]+j);
+
+        // // Transpose so that b column will be a register "row"
+        // _MM_TRANSPOSE4_PS(b0, b1, b2, b3);
+
+        // // Matrix multiplication for every index of c
+        // __m128 c00 = _mm_dp_ps(a0, b0, 0xF1);
+        // __m128 c01 = _mm_dp_ps(a0, b1, 0xF1);
+        // __m128 c02 = _mm_dp_ps(a0, b2, 0xF1);
+        // __m128 c03 = _mm_dp_ps(a0, b3, 0xF1);
+        // // Store the result in c
+        // //__m128 c0 = _mm_set_ps(c00, c01, c02, c03);
+        // _MM_TRANSPOSE4_PS(c00, c01, c02, c03);
+
+        // __m128 c10 = _mm_dp_ps(a1, b0, 0xF1);
+        // __m128 c11 = _mm_dp_ps(a1, b1, 0xF1);
+        // __m128 c12 = _mm_dp_ps(a1, b2, 0xF1);
+        // __m128 c13 = _mm_dp_ps(a1, b3, 0xF1);
+        // //__m128 c1 = _mm_set_ps(c10, c11, c12, c13);
+        // _MM_TRANSPOSE4_PS(c10, c11, c12, c13);
+
+        // __m128 c20 = _mm_dp_ps(a2, b0, 0xF1);
+        // __m128 c21 = _mm_dp_ps(a2, b1, 0xF1);
+        // __m128 c22 = _mm_dp_ps(a2, b2, 0xF1);
+        // __m128 c23 = _mm_dp_ps(a2, b3, 0xF1);
+        // //__m128 c2 = (c20, c21, c22, c23);
+        // _MM_TRANSPOSE4_PS(c20, c21, c22, c23);
+
+        // __m128 c30 = _mm_dp_ps(a3, b0, 0xF1);
+        // __m128 c31 = _mm_dp_ps(a3, b1, 0xF1);
+        // __m128 c32 = _mm_dp_ps(a3, b2, 0xF1);
+        // __m128 c33 = _mm_dp_ps(a3, b3, 0xF1);
+        // //__m128 c3 = (c30, c31, c32, c33);
+        // _MM_TRANSPOSE4_PS(c30, c31, c32, c33);
+
+        
+        // _mm_store_ps(mat_c[i] + j, _mm_add_ps(_mm_load_ps(mat_c[i] + j), c00));
+        // _mm_store_ps(mat_c[i + 1] + j, _mm_add_ps(_mm_load_ps(mat_c[i + 1] + j), c10));
+        // _mm_store_ps(mat_c[i + 2] + j, _mm_add_ps(_mm_load_ps(mat_c[i + 2] + j), c20));
+        // _mm_store_ps(mat_c[i + 3] + j, _mm_add_ps( _mm_load_ps(mat_c[i + 3] + j), c30));
+
+        // // Accumulate the results into mat_c
+        // __m128 mc0 = _mm_loadu_ps(&mat_c[i][j]);
+        // __m128 mc1 = _mm_loadu_ps(&mat_c[i + 1][j]);
+        // __m128 mc2 = _mm_loadu_ps(&mat_c[i + 2][j]);
+        // __m128 mc3 = _mm_loadu_ps(&mat_c[i + 3][j]);
+
+        // mc0 = _mm_add_ps(mc0, c0);
+        // mc1 = _mm_add_ps(mc1, c1);
+        // mc2 = _mm_add_ps(mc2, c2);
+        // mc3 = _mm_add_ps(mc3, c3);
+
+        // // Store the results back to mat_c
+        // _mm_storeu_ps(&mat_c[i][j], mc0);
+        // _mm_storeu_ps(&mat_c[i + 1][j], mc1);
+        // _mm_storeu_ps(&mat_c[i + 2][j], mc2);
+        // _mm_storeu_ps(&mat_c[i + 3][j], mc3);
+
+        // _mm_storeu_ps(&mat_c[i][j], c0);
+        // _mm_storeu_ps(&mat_c[i + 1][j], c1);
+        // _mm_storeu_ps(&mat_c[i + 2][j], c2);
+        // _mm_storeu_ps(&mat_c[i + 3][j], c3);
+
+
+        // _mm_storeu_ps(&mat_c[i][j], _mm_add_ps(_mm_load_ps(&mat_c[i][j]), c0));
+        // _mm_storeu_ps(&mat_c[i + 1][j], _mm_add_ps(_mm_load_ps(&mat_c[i + 1][j]), c1));
+        // _mm_storeu_ps(&mat_c[i + 2][j], _mm_add_ps(_mm_load_ps(&mat_c[i + 2][j]), c2));
+        // _mm_storeu_ps(&mat_c[i + 3][j], _mm_add_ps(_mm_load_ps(&mat_c[i + 3][j]), c3));
 }
 
 /**
