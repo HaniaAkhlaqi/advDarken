@@ -56,14 +56,12 @@
 #define MODE MODE_SSE
 #endif
 
+#define XMM_ALIGNMENT_BYTES 16
 
-#define XMM_ALIGNMENT_BYTES 16 
-
-static float mat_a[SIZE][SIZE] __attribute__((aligned (XMM_ALIGNMENT_BYTES)));
-static float mat_b[SIZE][SIZE] __attribute__((aligned (XMM_ALIGNMENT_BYTES)));
-static float mat_c[SIZE][SIZE] __attribute__((aligned (XMM_ALIGNMENT_BYTES)));
-static float mat_ref[SIZE][SIZE] __attribute__((aligned (XMM_ALIGNMENT_BYTES)));
-
+static float mat_a[SIZE][SIZE] __attribute__((aligned(XMM_ALIGNMENT_BYTES)));
+static float mat_b[SIZE][SIZE] __attribute__((aligned(XMM_ALIGNMENT_BYTES)));
+static float mat_c[SIZE][SIZE] __attribute__((aligned(XMM_ALIGNMENT_BYTES)));
+static float mat_ref[SIZE][SIZE] __attribute__((aligned(XMM_ALIGNMENT_BYTES)));
 
 // static void
 // matmat(size_t n, float mat_c[n][n],
@@ -94,6 +92,44 @@ matmul_sse_block(int i, int j, int k)
          * parameter can be used to restrict to which elements the
          * result is stored, all other elements are set to zero.
          */
+        __m128 a0 = _mm_load_ps(mat_a[i] + k);
+        __m128 a1 = _mm_load_ps(mat_a[i + 1] + k);
+        __m128 a2 = _mm_load_ps(mat_a[i + 2] + k);
+        __m128 a3 = _mm_load_ps(mat_a[i + 3] + k);
+
+        __m128 b0 = _mm_load_ps(mat_b[k] + j);
+        __m128 b1 = _mm_load_ps(mat_b[k + 1] + j);
+        __m128 b2 = _mm_load_ps(mat_b[k + 2] + j);
+        __m128 b3 = _mm_load_ps(mat_b[k + 3] + j);
+
+        _MM_TRANSPOSE4_PS(b0, b1, b2, b3);
+
+        __m128 c00 = _mm_dp_ps(a0, b0, 0xF1);
+        __m128 c01 = _mm_dp_ps(a0, b1, 0xF1);
+        __m128 c02 = _mm_dp_ps(a0, b2, 0xF1);
+        __m128 c03 = _mm_dp_ps(a0, b3, 0xF1);
+        __m128 c10 = _mm_dp_ps(a1, b0, 0xF1);
+        __m128 c11 = _mm_dp_ps(a1, b1, 0xF1);
+        __m128 c12 = _mm_dp_ps(a1, b2, 0xF1);
+        __m128 c13 = _mm_dp_ps(a1, b3, 0xF1);
+        __m128 c20 = _mm_dp_ps(a2, b0, 0xF1);
+        __m128 c21 = _mm_dp_ps(a2, b1, 0xF1);
+        __m128 c22 = _mm_dp_ps(a2, b2, 0xF1);
+        __m128 c23 = _mm_dp_ps(a2, b3, 0xF1);
+        __m128 c30 = _mm_dp_ps(a3, b0, 0xF1);
+        __m128 c31 = _mm_dp_ps(a3, b1, 0xF1);
+        __m128 c32 = _mm_dp_ps(a3, b2, 0xF1);
+        __m128 c33 = _mm_dp_ps(a3, b3, 0xF1);
+
+        _MM_TRANSPOSE4_PS(c00, c01, c02, c03);
+        _MM_TRANSPOSE4_PS(c10, c11, c12, c13);
+        _MM_TRANSPOSE4_PS(c20, c21, c22, c23);
+        _MM_TRANSPOSE4_PS(c30, c31, c32, c33);
+
+        _mm_store_ps(mat_c[i] + j, _mm_add_ps(_mm_load_ps(mat_c[i] + j), c00));
+        _mm_store_ps(mat_c[i + 1] + j, _mm_add_ps(_mm_load_ps(mat_c[i + 1] + j), c10));
+        _mm_store_ps(mat_c[i + 2] + j, _mm_add_ps(_mm_load_ps(mat_c[i + 2] + j), c20));
+        _mm_store_ps(mat_c[i + 3] + j, _mm_add_ps( _mm_load_ps(mat_c[i + 3] + j), c30));
 }
 
 /**
@@ -103,135 +139,80 @@ matmul_sse_block(int i, int j, int k)
 static inline void
 matmul_block(int i, int j, int k)
 {
-        mat_c[i][j] += 
-                mat_a[i][k] * mat_b[k][j]
-                + mat_a[i][k + 1] * mat_b[k + 1][j]
-                + mat_a[i][k + 2] * mat_b[k + 2][j]
-                + mat_a[i][k + 3] * mat_b[k + 3][j];
+        mat_c[i][j] +=
+            mat_a[i][k] * mat_b[k][j] + mat_a[i][k + 1] * mat_b[k + 1][j] + mat_a[i][k + 2] * mat_b[k + 2][j] + mat_a[i][k + 3] * mat_b[k + 3][j];
 
-        mat_c[i][j + 1] += 
-                mat_a[i][k] * mat_b[k][j + 1]
-                + mat_a[i][k + 1] * mat_b[k + 1][j + 1]
-                + mat_a[i][k + 2] * mat_b[k + 2][j + 1]
-                + mat_a[i][k + 3] * mat_b[k + 3][j + 1];
+        mat_c[i][j + 1] +=
+            mat_a[i][k] * mat_b[k][j + 1] + mat_a[i][k + 1] * mat_b[k + 1][j + 1] + mat_a[i][k + 2] * mat_b[k + 2][j + 1] + mat_a[i][k + 3] * mat_b[k + 3][j + 1];
 
-        mat_c[i][j + 2] += 
-                mat_a[i][k] * mat_b[k][j + 2]
-                + mat_a[i][k + 1] * mat_b[k + 1][j + 2]
-                + mat_a[i][k + 2] * mat_b[k + 2][j + 2]
-                + mat_a[i][k + 3] * mat_b[k + 3][j + 2];
+        mat_c[i][j + 2] +=
+            mat_a[i][k] * mat_b[k][j + 2] + mat_a[i][k + 1] * mat_b[k + 1][j + 2] + mat_a[i][k + 2] * mat_b[k + 2][j + 2] + mat_a[i][k + 3] * mat_b[k + 3][j + 2];
 
-        mat_c[i][j + 3] += 
-                mat_a[i][k] * mat_b[k][j + 3]
-                + mat_a[i][k + 1] * mat_b[k + 1][j + 3]
-                + mat_a[i][k + 2] * mat_b[k + 2][j + 3]
-                + mat_a[i][k + 3] * mat_b[k + 3][j + 3];
+        mat_c[i][j + 3] +=
+            mat_a[i][k] * mat_b[k][j + 3] + mat_a[i][k + 1] * mat_b[k + 1][j + 3] + mat_a[i][k + 2] * mat_b[k + 2][j + 3] + mat_a[i][k + 3] * mat_b[k + 3][j + 3];
 
+        mat_c[i + 1][j] +=
+            mat_a[i + 1][k] * mat_b[k][j] + mat_a[i + 1][k + 1] * mat_b[k + 1][j] + mat_a[i + 1][k + 2] * mat_b[k + 2][j] + mat_a[i + 1][k + 3] * mat_b[k + 3][j];
 
+        mat_c[i + 1][j + 1] +=
+            mat_a[i + 1][k] * mat_b[k][j + 1] + mat_a[i + 1][k + 1] * mat_b[k + 1][j + 1] + mat_a[i + 1][k + 2] * mat_b[k + 2][j + 1] + mat_a[i + 1][k + 3] * mat_b[k + 3][j + 1];
 
-        mat_c[i + 1][j] += 
-                mat_a[i + 1][k] * mat_b[k][j]
-                + mat_a[i + 1][k + 1] * mat_b[k + 1][j]
-                + mat_a[i + 1][k + 2] * mat_b[k + 2][j]
-                + mat_a[i + 1][k + 3] * mat_b[k + 3][j];
+        mat_c[i + 1][j + 2] +=
+            mat_a[i + 1][k] * mat_b[k][j + 2] + mat_a[i + 1][k + 1] * mat_b[k + 1][j + 2] + mat_a[i + 1][k + 2] * mat_b[k + 2][j + 2] + mat_a[i + 1][k + 3] * mat_b[k + 3][j + 2];
 
-        mat_c[i + 1][j + 1] += 
-                mat_a[i + 1][k] * mat_b[k][j + 1]
-                + mat_a[i + 1][k + 1] * mat_b[k + 1][j + 1]
-                + mat_a[i + 1][k + 2] * mat_b[k + 2][j + 1]
-                + mat_a[i + 1][k + 3] * mat_b[k + 3][j + 1];
+        mat_c[i + 1][j + 3] +=
+            mat_a[i + 1][k] * mat_b[k][j + 3] + mat_a[i + 1][k + 1] * mat_b[k + 1][j + 3] + mat_a[i + 1][k + 2] * mat_b[k + 2][j + 3] + mat_a[i + 1][k + 3] * mat_b[k + 3][j + 3];
 
-        mat_c[i + 1][j + 2] += 
-                mat_a[i + 1][k] * mat_b[k][j + 2]
-                + mat_a[i + 1][k + 1] * mat_b[k + 1][j + 2]
-                + mat_a[i + 1][k + 2] * mat_b[k + 2][j + 2]
-                + mat_a[i + 1][k + 3] * mat_b[k + 3][j + 2];
+        mat_c[i + 2][j] +=
+            mat_a[i + 2][k] * mat_b[k][j] + mat_a[i + 2][k + 1] * mat_b[k + 1][j] + mat_a[i + 2][k + 2] * mat_b[k + 2][j] + mat_a[i + 2][k + 3] * mat_b[k + 3][j];
 
-        mat_c[i + 1][j + 3] += 
-                mat_a[i + 1][k] * mat_b[k][j + 3]
-                + mat_a[i + 1][k + 1] * mat_b[k + 1][j + 3]
-                + mat_a[i + 1][k + 2] * mat_b[k + 2][j + 3]
-                + mat_a[i + 1][k + 3] * mat_b[k + 3][j + 3];
+        mat_c[i + 2][j + 1] +=
+            mat_a[i + 2][k] * mat_b[k][j + 1] + mat_a[i + 2][k + 1] * mat_b[k + 1][j + 1] + mat_a[i + 2][k + 2] * mat_b[k + 2][j + 1] + mat_a[i + 2][k + 3] * mat_b[k + 3][j + 1];
 
+        mat_c[i + 2][j + 2] +=
+            mat_a[i + 2][k] * mat_b[k][j + 2] + mat_a[i + 2][k + 1] * mat_b[k + 1][j + 2] + mat_a[i + 2][k + 2] * mat_b[k + 2][j + 2] + mat_a[i + 2][k + 3] * mat_b[k + 3][j + 2];
 
+        mat_c[i + 2][j + 3] +=
+            mat_a[i + 2][k] * mat_b[k][j + 3] + mat_a[i + 2][k + 1] * mat_b[k + 1][j + 3] + mat_a[i + 2][k + 2] * mat_b[k + 2][j + 3] + mat_a[i + 2][k + 3] * mat_b[k + 3][j + 3];
 
-        mat_c[i + 2][j] += 
-                mat_a[i + 2][k] * mat_b[k][j]
-                + mat_a[i + 2][k + 1] * mat_b[k + 1][j]
-                + mat_a[i + 2][k + 2] * mat_b[k + 2][j]
-                + mat_a[i + 2][k + 3] * mat_b[k + 3][j];
+        mat_c[i + 3][j] +=
+            mat_a[i + 3][k] * mat_b[k][j] + mat_a[i + 3][k + 1] * mat_b[k + 1][j] + mat_a[i + 3][k + 2] * mat_b[k + 2][j] + mat_a[i + 3][k + 3] * mat_b[k + 3][j];
 
-        mat_c[i + 2][j + 1] += 
-                mat_a[i + 2][k] * mat_b[k][j + 1]
-                + mat_a[i + 2][k + 1] * mat_b[k + 1][j + 1]
-                + mat_a[i + 2][k + 2] * mat_b[k + 2][j + 1]
-                + mat_a[i + 2][k + 3] * mat_b[k + 3][j + 1];
+        mat_c[i + 3][j + 1] +=
+            mat_a[i + 3][k] * mat_b[k][j + 1] + mat_a[i + 3][k + 1] * mat_b[k + 1][j + 1] + mat_a[i + 3][k + 2] * mat_b[k + 2][j + 1] + mat_a[i + 3][k + 3] * mat_b[k + 3][j + 1];
 
-        mat_c[i + 2][j + 2] += 
-                mat_a[i + 2][k] * mat_b[k][j + 2]
-                + mat_a[i + 2][k + 1] * mat_b[k + 1][j + 2]
-                + mat_a[i + 2][k + 2] * mat_b[k + 2][j + 2]
-                + mat_a[i + 2][k + 3] * mat_b[k + 3][j + 2];
+        mat_c[i + 3][j + 2] +=
+            mat_a[i + 3][k] * mat_b[k][j + 2] + mat_a[i + 3][k + 1] * mat_b[k + 1][j + 2] + mat_a[i + 3][k + 2] * mat_b[k + 2][j + 2] + mat_a[i + 3][k + 3] * mat_b[k + 3][j + 2];
 
-        mat_c[i + 2][j + 3] += 
-                mat_a[i + 2][k] * mat_b[k][j + 3]
-                + mat_a[i + 2][k + 1] * mat_b[k + 1][j + 3]
-                + mat_a[i + 2][k + 2] * mat_b[k + 2][j + 3]
-                + mat_a[i + 2][k + 3] * mat_b[k + 3][j + 3];
+        mat_c[i + 3][j + 3] +=
+            mat_a[i + 3][k] * mat_b[k][j + 3] + mat_a[i + 3][k + 1] * mat_b[k + 1][j + 3] + mat_a[i + 3][k + 2] * mat_b[k + 2][j + 3] + mat_a[i + 3][k + 3] * mat_b[k + 3][j + 3];
 
+        /*
+         * The code in this function can alternatively be expressed using macros:
+         */
+        /*
+        #define BLOCK_SUB(n, m, l) ( mat_a[i + n][k + l] * mat_b[k + l][j + m] )
 
+        #define BLOCK_CELL(n, m) { \
+                mat_c[i + n][j + m] += \
+                        BLOCK_SUB(n, m, 0) + \
+                        BLOCK_SUB(n, m, 1) + \
+                        BLOCK_SUB(n, m, 2) + \
+                        BLOCK_SUB(n, m, 3) ; \
+        }
 
-        mat_c[i + 3][j] += 
-                mat_a[i + 3][k] * mat_b[k][j]
-                + mat_a[i + 3][k + 1] * mat_b[k + 1][j]
-                + mat_a[i + 3][k + 2] * mat_b[k + 2][j]
-                + mat_a[i + 3][k + 3] * mat_b[k + 3][j];
+        #define BLOCK_ROW(n) { \
+                BLOCK_CELL(n, 0); \
+                BLOCK_CELL(n, 1); \
+                BLOCK_CELL(n, 2); \
+                BLOCK_CELL(n, 3); \
+        }
 
-        mat_c[i + 3][j + 1] += 
-                mat_a[i + 3][k] * mat_b[k][j + 1]
-                + mat_a[i + 3][k + 1] * mat_b[k + 1][j + 1]
-                + mat_a[i + 3][k + 2] * mat_b[k + 2][j + 1]
-                + mat_a[i + 3][k + 3] * mat_b[k + 3][j + 1];
-
-        mat_c[i + 3][j + 2] += 
-                mat_a[i + 3][k] * mat_b[k][j + 2]
-                + mat_a[i + 3][k + 1] * mat_b[k + 1][j + 2]
-                + mat_a[i + 3][k + 2] * mat_b[k + 2][j + 2]
-                + mat_a[i + 3][k + 3] * mat_b[k + 3][j + 2];
-
-        mat_c[i + 3][j + 3] += 
-                mat_a[i + 3][k] * mat_b[k][j + 3]
-                + mat_a[i + 3][k + 1] * mat_b[k + 1][j + 3]
-                + mat_a[i + 3][k + 2] * mat_b[k + 2][j + 3]
-                + mat_a[i + 3][k + 3] * mat_b[k + 3][j + 3];
-
-/*
- * The code in this function can alternatively be expressed using macros:
- */
-/*
-#define BLOCK_SUB(n, m, l) ( mat_a[i + n][k + l] * mat_b[k + l][j + m] )
-
-#define BLOCK_CELL(n, m) { \
-        mat_c[i + n][j + m] += \
-                BLOCK_SUB(n, m, 0) + \
-                BLOCK_SUB(n, m, 1) + \
-                BLOCK_SUB(n, m, 2) + \
-                BLOCK_SUB(n, m, 3) ; \
-}
-
-#define BLOCK_ROW(n) { \
-        BLOCK_CELL(n, 0); \
-        BLOCK_CELL(n, 1); \
-        BLOCK_CELL(n, 2); \
-        BLOCK_CELL(n, 3); \
-}
-
-        BLOCK_ROW(0);
-        BLOCK_ROW(1);
-        BLOCK_ROW(2);
-        BLOCK_ROW(3);
-*/
-
+                BLOCK_ROW(0);
+                BLOCK_ROW(1);
+                BLOCK_ROW(2);
+                BLOCK_ROW(3);
+        */
 }
 
 #if MODE == MODE_SSE_BLOCKED || MODE == MODE_BLOCKED
@@ -245,7 +226,8 @@ matmul_block_l1(int i, int j, int k)
 
         for (ii = i; ii < i + L1_BLOCK_SIZE; ii += SSE_BLOCK_SIZE)
                 for (kk = k; kk < k + L1_BLOCK_SIZE; kk += SSE_BLOCK_SIZE)
-                        for (jj = j; jj < j + L1_BLOCK_SIZE; jj += SSE_BLOCK_SIZE) {
+                        for (jj = j; jj < j + L1_BLOCK_SIZE; jj += SSE_BLOCK_SIZE)
+                        {
 #if MODE == MODE_SSE_BLOCKED
                                 matmul_sse_block(ii, jj, kk);
 #elif MODE == MODE_BLOCKED
@@ -311,15 +293,18 @@ matmul_sse()
             for (int j = 0; j < n; j++)
                 mat_c[i][j] += mat_a[i][k] * mat_b[k][j];
 }*/
-        for (i=0;i<SIZE;i++){
-                for (k=0;k<SIZE; k ++) {
+        for (i = 0; i < SIZE; i++)
+        {
+                for (k = 0; k < SIZE; k++)
+                {
                         __m128 a = _mm_set1_ps(mat_a[i][k]);
-                        for (j=0;j<SIZE;j+=4){
-                                __m128 col = _mm_load_ps(mat_b[k]+j);
-                                _mm_store_ps(mat_c[i]+j,_mm_add_ps(_mm_load_ps(mat_c[i]+j),_mm_mul_ps(a, col)));
-                       }
+                        for (j = 0; j < SIZE; j += 4)
+                        {
+                                __m128 col = _mm_load_ps(mat_b[k] + j);
+                                _mm_store_ps(mat_c[i] + j, _mm_add_ps(_mm_load_ps(mat_c[i] + j), _mm_mul_ps(a, col)));
+                        }
                 }
-        }   
+        }
 }
 
 #else
@@ -337,9 +322,12 @@ matmul_ref()
 {
         int i, j, k;
 
-        for (i = 0; i < SIZE; i++) {
-                for (k = 0; k < SIZE; k++) {
-                        for (j = 0; j < SIZE; j++) {
+        for (i = 0; i < SIZE; i++)
+        {
+                for (k = 0; k < SIZE; k++)
+                {
+                        for (j = 0; j < SIZE; j++)
+                        {
                                 mat_ref[i][j] += mat_a[i][k] * mat_b[k][j];
                         }
                 }
@@ -356,11 +344,11 @@ verify_result()
         int i, j;
 
         e_sum = 0;
-        for (i = 0; i < SIZE; i++) {
-                for (j = 0; j < SIZE; j++) {
-                        e_sum += mat_c[i][j] < mat_ref[i][j] ?
-                                mat_ref[i][j] - mat_c[i][j] :
-                                mat_c[i][j] - mat_ref[i][j];
+        for (i = 0; i < SIZE; i++)
+        {
+                for (j = 0; j < SIZE; j++)
+                {
+                        e_sum += mat_c[i][j] < mat_ref[i][j] ? mat_ref[i][j] - mat_c[i][j] : mat_c[i][j] - mat_ref[i][j];
                 }
         }
 
@@ -380,8 +368,10 @@ init_matrices()
 {
         int i, j;
 
-        for (i = 0; i < SIZE; i++) {
-                for (j = 0; j < SIZE; j++) {
+        for (i = 0; i < SIZE; i++)
+        {
+                for (j = 0; j < SIZE; j++)
+                {
                         mat_a[i][j] = ((i + j) & 0x0F) * 0x1P-4F;
                         mat_b[i][j] = (((i << 1) + (j >> 1)) & 0x0F) * 0x1P-4F;
                 }
@@ -417,28 +407,29 @@ run_multiply()
         printf("Speedup: %.2f\n",
                runtime_ref / runtime_sse);
 
-
-        if (verify_result()) {
+        if (verify_result())
+        {
                 printf("OK\n");
                 return 0;
-        } else {
+        }
+        else
+        {
                 printf("MISMATCH\n");
                 return 1;
         }
 }
 
-int
-main(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
         /* Initialize the matrices with some "random" data. */
         init_matrices();
 
         int rc = run_multiply();
-        if (rc) return 1;
+        if (rc)
+                return 1;
 
         return 0;
 }
-
 
 /*
  * Local Variables:
